@@ -1,0 +1,15 @@
+# local env (secrets + machine paths)
+.env
+.venv
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# local service state (lives on the SSD, never in git)
+mlflow.db
+mlruns/
+mlartifacts/
+airflow/
+# course handout
+*.pdf
+.DS_Store
