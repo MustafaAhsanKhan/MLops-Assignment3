@@ -1,0 +1,5 @@
+[core]
+    remote = ssd
+    autostage = true
+['remote "ssd"']
+    url = /Volumes/ColimaData/mlops-a3/dvc-remote
