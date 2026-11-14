@@ -47,18 +47,19 @@ class Tool:
     fn: Callable[[BaseModel], dict]
     mutating: bool
     precheck: Callable[[BaseModel], None] | None
+    timeout: float | None = None  # overrides config.TOOL_TIMEOUT_S, e.g. for waiting tools
 
 
 REGISTRY: dict[str, Tool] = {}
 
 
 def tool(module: str, input_model: type[BaseModel] = NoArgs, *, mutating: bool = False,
-         precheck: Callable[[BaseModel], None] | None = None):
+         precheck: Callable[[BaseModel], None] | None = None, timeout: float | None = None):
     """Register a function as an agent tool. Its docstring is the description the LLM sees."""
 
     def wrap(fn):
         REGISTRY[fn.__name__] = Tool(fn.__name__, module, " ".join((fn.__doc__ or "").split()),
-                                     input_model, fn, mutating, precheck)
+                                     input_model, fn, mutating, precheck, timeout)
         return fn
 
     return wrap
@@ -76,9 +77,9 @@ def redact(obj):
 def run_tool(name: str, args: dict | None, request_id: str, *, confirmed: bool = False,
              timeout: float | None = None) -> ToolResult:
     start = time.perf_counter()
-    timeout = timeout or config.TOOL_TIMEOUT_S
     status, data, error = "error", None, None
     t = REGISTRY.get(name)
+    timeout = timeout or (t.timeout if t else None) or config.TOOL_TIMEOUT_S
     try:
         if t is None:
             raise ToolError(f"unknown tool '{name}'")

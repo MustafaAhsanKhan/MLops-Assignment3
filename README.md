@@ -148,3 +148,47 @@ exist). The new pod went `ErrImagePull` → `ImagePullBackOff`, and the Warning 
 `pull access denied for prediction-api`. Because `maxUnavailable: 0`, both v8 pods stayed Ready and
 the service never went down; the rollout just stalled (`UP-TO-DATE 1`, `AVAILABLE 2`). Fixed with
 `kubectl rollout undo deployment/prediction-api`.
+
+## The agent
+
+Gemini (`GEMINI_MODEL`, default `gemini-3.5-flash-lite`) with function calling over 28 tools in
+`agent/tools/` (DVC, MLflow, Airflow, Kubernetes). It uses the Interactions API with `store=False`:
+the conversation history is kept by the agent, and tool output is not stored by Google.
+
+```bash
+uvicorn api.main:app --port 8000          # HTTP API (needs GEMINI_API_KEY in .env)
+python -m agent.main                      # terminal chat
+python -m agent.main "Is the prediction API healthy?"
+```
+
+```bash
+curl -s localhost:8000/chat -H 'Content-Type: application/json' \
+  -d '{"message": "Find the best recent model, identify the dataset version used to train it, check the deployment status, and explain whether retraining is necessary."}'
+```
+
+The response has `answer`, `tool_calls` (each tool with its args, status and duration) and
+`pending_actions`.
+
+**Safety model**
+
+- Every tool call goes through `agent/tools/base.py:run_tool`: argument validation, allowlist
+  checks (namespace `mlops-app`, DAG `training_pipeline`, read-only dvc/git subcommands), timeout,
+  error capture, and one JSON log line per call (request id, tool, status, duration, redacted args).
+- `trigger_dag`, `restart_deployment` and `scale_deployment` never run on the model's say-so. The
+  call becomes a pending action with an id. It runs only when the user sends that id back in
+  `confirm_action_ids`, and it runs with exactly the arguments that were proposed.
+- A failed, timed-out or denied tool is reported to the model as such, and the system prompt requires
+  the answer to say what could not be verified. If the Gemini call itself fails, the API returns
+  502 instead of an answer.
+- Retraining is only recommended on evidence: a failed gate, a newer dataset version than the
+  deployed model's, a model older than `MODEL_MAX_AGE_DAYS` (30), or degradation results the user
+  supplied.
+
+```bash
+# 1. ask; the response lists a pending action, e.g. {"action_id": "71b2b9cc", "tool": "trigger_dag", ...}
+curl -s localhost:8000/chat -H 'Content-Type: application/json' \
+  -d '{"message": "Trigger the training pipeline with a random forest of 120 trees and report whether it succeeded."}'
+# 2. confirm it in the same session
+curl -s localhost:8000/chat -H 'Content-Type: application/json' \
+  -d '{"message": "Confirmed.", "session_id": "<session_id>", "confirm_action_ids": ["71b2b9cc"]}'
+```

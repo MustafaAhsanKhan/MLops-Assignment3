@@ -1,6 +1,7 @@
 """Airflow 3 tools over the REST API v2 with JWT auth: DAGs, runs, tasks, logs, triggering."""
 
 import re
+import time
 from typing import Literal
 from urllib.parse import quote
 
@@ -139,6 +140,30 @@ def get_dag_run_status(a: RunArgs) -> dict:
     run_id = _resolve_run_id(a.dag_id, a.dag_run_id)
     run = api("GET", f"/dags/{_q(a.dag_id)}/dagRuns/{_q(run_id)}")
     return {**_run_summary(run), "tasks": _tasks(a.dag_id, run_id)}
+
+
+class WaitArgs(RunArgs):
+    max_wait_s: int = Field(150, ge=10, le=300)
+
+
+@tool("airflow", WaitArgs, timeout=320)
+def wait_for_dag_run(a: WaitArgs) -> dict:
+    """Wait until a DAG run (or the latest) finishes, polling every 5 s, then return its final state,
+    task states and, if it failed, the error lines of the failed tasks. Use this once to report
+    whether a triggered run succeeded, instead of polling get_dag_run_status."""
+    run_id = _resolve_run_id(a.dag_id, a.dag_run_id)
+    deadline = time.monotonic() + a.max_wait_s
+    while True:
+        run = api("GET", f"/dags/{_q(a.dag_id)}/dagRuns/{_q(run_id)}")
+        if run["state"] in ("success", "failed") or time.monotonic() >= deadline:
+            break
+        time.sleep(5)
+    tasks = _tasks(a.dag_id, run_id)
+    failures = [{"task_id": t["task_id"], "error_lines": [
+        ln for ln in _log_lines(a.dag_id, run_id, t["task_id"], t["try_number"])
+        if re.search(r"ERROR|Error|Exception|failed", ln)][-8:]} for t in tasks if t["state"] == "failed"]
+    return {**_run_summary(run), "finished": run["state"] in ("success", "failed"),
+            "tasks": tasks, "failures": failures}
 
 
 @tool("airflow", DagArgs)

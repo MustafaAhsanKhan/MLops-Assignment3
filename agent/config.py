@@ -11,6 +11,7 @@ load_dotenv(REPO_ROOT / ".env")
 # Fail fast instead of MLflow's default minutes of retries when the server is down.
 os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "0")
 os.environ.setdefault("MLFLOW_HTTP_REQUEST_TIMEOUT", "10")
+os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001")
 MLFLOW_EXPERIMENT = "breast-cancer-classifier"
@@ -28,3 +29,7 @@ TOOL_TIMEOUT_S = float(os.getenv("TOOL_TIMEOUT_S", "20"))
 HTTP_TIMEOUT_S = float(os.getenv("HTTP_TIMEOUT_S", "10"))
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "8"))  # model<->tool round trips per request
+
+# Explicit freshness policy the agent may cite: a deployed model older than this should be retrained.
+MODEL_MAX_AGE_DAYS = int(os.getenv("MODEL_MAX_AGE_DAYS", "30"))
