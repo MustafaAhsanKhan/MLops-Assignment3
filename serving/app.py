@@ -80,5 +80,5 @@ def predict(req: PredictRequest):
     return {
         "model_version": state["meta"]["model_version"],
         "predictions": [{"label": lbl, "class": CLASS_NAMES[lbl], "probability_benign": round(float(p), 4)}
-                        for lbl, p in zip(labels, proba)],
+                        for lbl, p in zip(labels, proba, strict=True)],
     }

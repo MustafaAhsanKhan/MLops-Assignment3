@@ -21,7 +21,16 @@ dependencies = [
 dev = ["pytest", "ruff"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
+
+[tool.ruff.lint]
+# Explicit set so lint results don't shift with ruff's defaults. Blind excepts are deliberate at
+# the tool boundary: a tool failure must become a reported error, never a crash or a guess.
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-third-party = ["kubernetes"]  # the repo's kubernetes/ manifest folder is not a package
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
