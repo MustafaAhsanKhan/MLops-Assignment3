@@ -113,3 +113,38 @@ curl -s -X POST localhost:8080/api/v2/dags/training_pipeline/dagRuns \
 `dvc status` reported the file modified, `validate_dataset` failed with
 `dataset validation failed: 30 missing values`, and the 4 tasks after it ended `upstream_failed`.
 No MLflow run or model version was created. Fixed with `dvc checkout --force data/dataset.csv`.
+
+## Prediction service on Kubernetes
+
+`serving/app.py` is a FastAPI service with `/health` (liveness), `/ready` (readiness: 503 with the
+reason if the model failed to load), `/version` (model version + provenance) and `/predict`.
+`serving/export_model.py` exports a registered version from MLflow, and the `Dockerfile` bakes it into
+the image tagged `prediction-api:model-v<N>`, so the image tag says exactly which model is deployed.
+
+```bash
+scripts/deploy-k8s.sh            # deploy the @candidate model (or pass a version number, e.g. 8)
+```
+
+The script exports the model, builds the image in colima's Docker (visible to k3s, so no registry is
+needed), updates the tag in `kubernetes/deployment.yaml` and runs `kubectl apply`.
+
+Manifests in `kubernetes/` (namespace `mlops-app`):
+
+| File | What |
+|---|---|
+| `deployment.yaml` | 2 replicas, rolling update with `maxUnavailable: 0`, readiness `/ready` + liveness `/health`, requests 100m/192Mi, limits 500m/512Mi, non-root |
+| `service.yaml` | ClusterIP, port 80 → 8000 |
+| `configmap.yaml` | `LOG_LEVEL`, `PREDICTION_THRESHOLD`, `MODEL_DIR` |
+
+Try it:
+
+```bash
+kubectl get --raw /api/v1/namespaces/mlops-app/services/prediction-api:http/proxy/version
+kubectl -n mlops-app port-forward svc/prediction-api 18080:80   # then POST localhost:18080/predict
+```
+
+**Injected failure (verified):** `kubectl set image ... api=prediction-api:model-v99` (the tag doesn't
+exist). The new pod went `ErrImagePull` → `ImagePullBackOff`, and the Warning events said
+`pull access denied for prediction-api`. Because `maxUnavailable: 0`, both v8 pods stayed Ready and
+the service never went down; the rollout just stalled (`UP-TO-DATE 1`, `AVAILABLE 2`). Fixed with
+`kubectl rollout undo deployment/prediction-api`.
