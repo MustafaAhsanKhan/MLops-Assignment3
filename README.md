@@ -76,3 +76,40 @@ scripts/start-mlflow.sh
 Every run is tagged with `data_version` (the `data-*` git tag whose DVC md5 matches the file on disk),
 `data_md5`, `data_matches_dvc`, `git_commit`, `git_dirty` and `quality_gate`. The registered model is
 `breast-cancer-classifier`. Moving it from `@candidate` to production is a human decision.
+
+## Airflow
+
+```bash
+scripts/start-airflow.sh   # UI + API on http://127.0.0.1:8080, user admin
+```
+
+On first start Airflow generates the admin password into
+`$AIRFLOW_HOME/simple_auth_manager_passwords.json.generated`. Put it in `.env` as `AIRFLOW_PASSWORD`.
+
+DAG `training_pipeline` (`dags/training_pipeline.py`), triggered on demand with params
+`model` (`logreg`|`rf`), `C` and `n_estimators`:
+
+```
+validate_dataset → preprocess_data → train_model → evaluate_and_log_mlflow → quality_gate
+```
+
+- Each task runs one stage of `training/train.py` with the project venv. Every DAG run gets its own
+  work folder `$DATA_ROOT/work/<run_id>`, and its MLflow run is tagged `pipeline=airflow:<run_id>`.
+- Retries: 2 (15 s apart) for preprocess/train/evaluate. `validate_dataset` and `quality_gate` get 0,
+  because a failed check would fail again.
+- A failed `validate_dataset` or `quality_gate` stops everything after it, so no model is registered.
+
+Trigger through the REST API (JWT auth):
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8080/auth/token -H 'Content-Type: application/json' \
+  -d "{\"username\":\"admin\",\"password\":\"$AIRFLOW_PASSWORD\"}" | jq -r .access_token)
+curl -s -X POST localhost:8080/api/v2/dags/training_pipeline/dagRuns \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"logical_date": null, "conf": {"model": "rf", "n_estimators": 150}}'
+```
+
+**Injected failure (verified):** 30 missing values were written into `data/dataset.csv`.
+`dvc status` reported the file modified, `validate_dataset` failed with
+`dataset validation failed: 30 missing values`, and the 4 tasks after it ended `upstream_failed`.
+No MLflow run or model version was created. Fixed with `dvc checkout --force data/dataset.csv`.
