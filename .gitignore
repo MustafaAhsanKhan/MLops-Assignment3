@@ -13,3 +13,4 @@ airflow/
 # course handout
 *.pdf
 .DS_Store
+work/

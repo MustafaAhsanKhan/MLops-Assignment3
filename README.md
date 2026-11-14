@@ -49,3 +49,30 @@ Reproduce an older version:
 ```bash
 git checkout data-v1 -- data/dataset.csv.dvc && .venv/bin/dvc checkout
 ```
+
+## MLflow + training
+
+Start the tracking server (UI at http://127.0.0.1:5001; port 5000 is taken by macOS AirPlay):
+
+```bash
+scripts/start-mlflow.sh
+```
+
+`training/train.py` runs the pipeline as separate stages (the Airflow DAG calls each one):
+
+| Stage | Does |
+|---|---|
+| `validate` | target present and binary, ≥100 rows, no nulls, all numeric |
+| `preprocess` | dedupe, stratified 80/20 split |
+| `train` | `StandardScaler` + `logreg` or `rf` |
+| `evaluate` | accuracy/precision/recall/F1/ROC-AUC → MLflow run with provenance tags and the model |
+| `gate` | F1 ≥ 0.95, ROC-AUC ≥ 0.97 and data matches DVC → register and set alias `@candidate`; otherwise fail and register nothing |
+
+```bash
+.venv/bin/python training/train.py all --model logreg --C 1.0
+.venv/bin/python training/train.py all --model rf --n-estimators 200
+```
+
+Every run is tagged with `data_version` (the `data-*` git tag whose DVC md5 matches the file on disk),
+`data_md5`, `data_matches_dvc`, `git_commit`, `git_dirty` and `quality_gate`. The registered model is
+`breast-cancer-classifier`. Moving it from `@candidate` to production is a human decision.
