@@ -133,12 +133,14 @@ def compare_dataset_versions(a: CompareArgs) -> dict:
 
 @tool("dvc")
 def check_data_changes(_: BaseModel) -> dict:
-    """Detect whether DVC-tracked data on disk differs from what is committed (dvc status), and
-    whether any .dvc pointer files have uncommitted changes."""
+    """Detect whether DVC-tracked data on disk differs from what is committed (dvc status), whether
+    any .dvc pointer files have uncommitted changes, and which dvc.yaml pipeline stages are stale."""
     status = json.loads(run_cmd("dvc", "status", "--json") or "{}")
+    data = {k: v for k, v in status.items() if k.endswith(".dvc")}
     pointer_changes = run_cmd("git", "status", "--porcelain", "--", "*.dvc").strip().splitlines()
-    return {"data_changed": bool(status) or bool(pointer_changes), "dvc_status": status,
-            "uncommitted_dvc_files": pointer_changes}
+    return {"data_changed": bool(data) or bool(pointer_changes), "dvc_status": data,
+            "uncommitted_dvc_files": pointer_changes,
+            "stale_pipeline_stages": sorted(k for k in status if k not in data)}
 
 
 @tool("dvc", RunArgs)

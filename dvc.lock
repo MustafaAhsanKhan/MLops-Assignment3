@@ -1,0 +1,62 @@
+schema: '2.0'
+stages:
+  validate:
+    cmd: python training/train.py validate --workdir work/dvc
+    deps:
+    - path: data/dataset.csv
+      hash: md5
+      md5: 5afc23b9622f8f9ffa60824f4e97d0d5
+      size: 121385
+    - path: training/train.py
+      hash: md5
+      md5: a90c4fa4827e00c6805321a93d050828
+      size: 8385
+    outs:
+    - path: work/dvc/validation.json
+      hash: md5
+      md5: 7bd385059ea2d16f5ad5f99bf3ca1a00
+      size: 277
+  preprocess:
+    cmd: python training/train.py preprocess --workdir work/dvc
+    deps:
+    - path: data/dataset.csv
+      hash: md5
+      md5: 5afc23b9622f8f9ffa60824f4e97d0d5
+      size: 121385
+    - path: training/train.py
+      hash: md5
+      md5: a90c4fa4827e00c6805321a93d050828
+      size: 8385
+    - path: work/dvc/validation.json
+      hash: md5
+      md5: 7bd385059ea2d16f5ad5f99bf3ca1a00
+      size: 277
+    outs:
+    - path: work/dvc/test.csv
+      hash: md5
+      md5: a0864871521c5b0a3859dc0e54ccbc29
+      size: 24681
+    - path: work/dvc/train.csv
+      hash: md5
+      md5: 7bab774b027c20cb0c5d906f7b085507
+      size: 97196
+  train:
+    cmd: python training/train.py train --workdir work/dvc
+    deps:
+    - path: training/train.py
+      hash: md5
+      md5: a90c4fa4827e00c6805321a93d050828
+      size: 8385
+    - path: work/dvc/train.csv
+      hash: md5
+      md5: 7bab774b027c20cb0c5d906f7b085507
+      size: 97196
+    outs:
+    - path: work/dvc/model.joblib
+      hash: md5
+      md5: 23712d70ae61825adf3a5dbd093da72d
+      size: 3105
+    - path: work/dvc/params.json
+      hash: md5
+      md5: 11d4eb79670ba9fe8bcf33e9ef327319
+      size: 29

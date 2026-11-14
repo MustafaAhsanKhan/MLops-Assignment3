@@ -1,0 +1,28 @@
+# The training pipeline as DVC stages: the same five steps as the Airflow DAG, so a dataset version
+# can be re-run locally and DVC knows which steps are stale when data or code change.
+#   uv run dvc repro train      # validate -> preprocess -> train, no MLflow needed
+#   uv run dvc repro            # all stages; evaluate/gate log to MLflow and may register a model
+stages:
+  validate:
+    cmd: python training/train.py validate --workdir work/dvc
+    deps: [data/dataset.csv, training/train.py]
+    outs:
+      - work/dvc/validation.json:
+          cache: false
+  preprocess:
+    cmd: python training/train.py preprocess --workdir work/dvc
+    deps: [data/dataset.csv, training/train.py, work/dvc/validation.json]
+    outs: [work/dvc/train.csv, work/dvc/test.csv]
+  train:
+    cmd: python training/train.py train --workdir work/dvc
+    deps: [work/dvc/train.csv, training/train.py]
+    outs: [work/dvc/model.joblib, work/dvc/params.json]
+  evaluate:
+    cmd: python training/train.py evaluate --workdir work/dvc --pipeline-tag dvc
+    deps: [work/dvc/model.joblib, work/dvc/test.csv, training/train.py]
+    outs:
+      - work/dvc/run.json:
+          cache: false
+  quality_gate:
+    cmd: python training/train.py gate --workdir work/dvc --pipeline-tag dvc
+    deps: [work/dvc/run.json, training/train.py]

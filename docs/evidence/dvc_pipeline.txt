@@ -1,0 +1,69 @@
+$ dvc repro train
+'data/dataset.csv.dvc' didn't change, skipping
+Running stage 'validate':
+> python training/train.py validate --workdir work/dvc
+2026-11-14 23:27:48,410 INFO training stage validate
+2026-11-14 23:27:48,565 INFO training validation passed: 569 rows, data_version=data-v2
+Generating lock file 'dvc.lock'
+Updating lock file 'dvc.lock'
+
+Running stage 'preprocess':
+> python training/train.py preprocess --workdir work/dvc
+2026-11-14 23:27:53,576 INFO training stage preprocess
+2026-11-14 23:27:53,656 INFO training split 569 rows into train=455 test=114
+Updating lock file 'dvc.lock'
+
+Running stage 'train':
+> python training/train.py train --workdir work/dvc
+2026-11-14 23:27:57,887 INFO training stage train
+2026-11-14 23:27:57,968 INFO training trained {'model': 'logreg', 'C': 1.0}
+Updating lock file 'dvc.lock'
+Use `dvc push` to send your updates to remote storage.
+
+$ dvc status
+evaluate:
+	changed deps:
+		modified:           work/dvc/model.joblib
+		modified:           work/dvc/test.csv
+		modified:           training/train.py
+	changed outs:
+		deleted:            work/dvc/run.json
+quality_gate:
+	changed deps:
+		deleted:            work/dvc/run.json
+		modified:           training/train.py
+
+$ dvc dag
+     +----------------------+ 
+     | data/dataset.csv.dvc | 
+     +----------------------+ 
+           **         **      
+         **             **    
+        *                 **  
++----------+                * 
+| validate |              **  
++----------+            **    
+           **         **      
+             **     **        
+               *   *          
+          +------------+      
+          | preprocess |      
+          +------------+      
+           **         **      
+         **             *     
+        *                **   
+  +-------+                *  
+  | train |              **   
+  +-------+             *     
+           **         **      
+             **     **        
+               *   *          
+           +----------+       
+           | evaluate |       
+           +----------+       
+                 *            
+                 *            
+                 *            
+         +--------------+     
+         | quality_gate |     
+         +--------------+     

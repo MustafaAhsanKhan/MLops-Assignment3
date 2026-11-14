@@ -132,3 +132,18 @@ def test_every_call_writes_one_structured_log_line_with_secrets_redacted(caplog,
     assert line["tool"] == "scale_deployment" and line["status"] == "needs_confirmation"
     assert line["args"] == {"replicas": 2, "api_token": "***"}
     assert "s3cret" not in caplog.text
+
+
+def test_stale_pipeline_stages_are_not_reported_as_data_changes(monkeypatch):
+    status = {"evaluate": [{"changed deps": {}}]}
+
+    def fake_cmd(prog, *args):  # dvc status --json -> status; git status (pointer files) -> clean
+        return json.dumps(status) if prog == "dvc" else ""
+    monkeypatch.setattr(dvc_tools, "run_cmd", fake_cmd)
+
+    r = run_tool("check_data_changes", {}, "t")
+    assert r.data["data_changed"] is False and r.data["stale_pipeline_stages"] == ["evaluate"]
+
+    status["data/dataset.csv.dvc"] = [{"changed outs": {"data/dataset.csv": "modified"}}]
+    r = run_tool("check_data_changes", {}, "t")
+    assert r.data["data_changed"] is True and "data/dataset.csv.dvc" in r.data["dvc_status"]

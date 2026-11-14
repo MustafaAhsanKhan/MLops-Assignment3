@@ -1,0 +1,29 @@
+# Reproducible dataset checkout (DVC remote "ssd")
+
+$ dvc remote list
+ssd     /Volumes/ColimaData/mlops-a3/dvc-remote (default)
+
+$ git tag --list "data-*"
+data-v1
+data-v2
+
+## current workspace (HEAD = data-v2)
+rows=569  md5=5afc23b9622f8f9ffa60824f4e97d0d5  dvc-pointer-md5=5afc23b9622f8f9ffa60824f4e97d0d5
+
+$ git checkout data-v1 -- data/dataset.csv.dvc && dvc checkout data/dataset.csv.dvc
+M       data/dataset.csv
+rows=400  md5=2c0ae313d960d308e5d1a2e7aa9fb0f3  dvc-pointer-md5=2c0ae313d960d308e5d1a2e7aa9fb0f3
+
+$ dvc status   # data matches the data-v1 pointer
+Data and pipelines are up to date.
+
+## back to HEAD
+$ git checkout HEAD -- data/dataset.csv.dvc && dvc checkout data/dataset.csv.dvc
+M       data/dataset.csv
+rows=569  md5=5afc23b9622f8f9ffa60824f4e97d0d5  dvc-pointer-md5=5afc23b9622f8f9ffa60824f4e97d0d5
+
+$ dvc status -c   # cache vs remote: the dataset is in the remote; only local pipeline outputs are unpushed
+	new:                work/dvc/test.csv
+	new:                work/dvc/model.joblib
+	new:                work/dvc/train.csv
+	new:                work/dvc/params.json
