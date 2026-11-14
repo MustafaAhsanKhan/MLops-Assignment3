@@ -192,3 +192,24 @@ curl -s localhost:8000/chat -H 'Content-Type: application/json' \
 curl -s localhost:8000/chat -H 'Content-Type: application/json' \
   -d '{"message": "Confirmed.", "session_id": "<session_id>", "confirm_action_ids": ["71b2b9cc"]}'
 ```
+
+## Tests and CI
+
+```bash
+uv run ruff check .
+uv run pytest -v
+```
+
+20 tests in `tests/`. Every external service is replaced by a fake (a scripted Gemini client,
+patched Airflow/MLflow/Kubernetes calls), so the suite needs no running services or API keys and
+runs in under a second. They cover:
+
+- **Tool selection and execution**: the tool the model picks runs, and its result is what the model sees next.
+- **Validation**: bad arguments (e.g. 50 replicas) are rejected before anything runs.
+- **Permissions**: other namespaces and unapproved DAGs are denied even with confirmation, and DVC/git commands are allowlisted.
+- **Confirmation**: state changes wait for the user, run exactly as proposed, and use single-use ids; the model cannot approve its own action.
+- **Failures**: timeouts, Airflow/MLflow/Kubernetes unreachable, an LLM failure (HTTP 502, no answer), and the step limit. The model receives the error with no data, so there is nothing to invent from.
+- **Structured logs**: one JSON line per tool call, with secrets redacted.
+
+`.github/workflows/ci.yml` runs ruff and pytest on every pull request and on pushes to `main`,
+using the locked dependencies (`uv sync --frozen`).
