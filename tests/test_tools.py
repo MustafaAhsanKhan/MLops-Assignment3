@@ -147,3 +147,32 @@ def test_stale_pipeline_stages_are_not_reported_as_data_changes(monkeypatch):
     status["data/dataset.csv.dvc"] = [{"changed outs": {"data/dataset.csv": "modified"}}]
     r = run_tool("check_data_changes", {}, "t")
     assert r.data["data_changed"] is True and "data/dataset.csv.dvc" in r.data["dvc_status"]
+
+
+def test_pod_summary_says_oom_only_when_kubernetes_recorded_it():
+    from types import SimpleNamespace as NS
+
+    def pod(reason):
+        cs = NS(name="api", ready=True, restart_count=1, image="img", state=NS(waiting=None),
+                last_state=NS(terminated=NS(reason=reason, exit_code=137, finished_at=None)))
+        return NS(metadata=NS(name="p", labels={}), spec=NS(node_name="n"),
+                  status=NS(phase="Running", start_time=None, container_statuses=[cs]))
+    assert kubernetes_tools._pod_summary(pod("Error"))["containers"][0]["last_termination"]["oom_killed"] is False
+    assert kubernetes_tools._pod_summary(pod("OOMKilled"))["containers"][0]["last_termination"]["oom_killed"] is True
+
+
+def test_find_best_run_flags_ties_and_dirty_code(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    def run(run_id, f1, dirty):
+        tags = {"quality_gate": "passed", "data_version": "data-v2", "git_dirty": dirty}
+        return NS(info=NS(run_id=run_id, run_name=run_id, status="FINISHED", start_time=0),
+                  data=NS(metrics={"f1": f1}, params={}, tags=tags))
+    runs = [run("aaaa1111", 0.9861, "true"), run("bbbb2222", 0.9861, "false"), run("cccc3333", 0.95, "false")]
+    monkeypatch.setattr(mlflow_tools, "_recent_runs", lambda exp, n: runs)
+    monkeypatch.setattr(mlflow_tools, "client", lambda: NS(search_model_versions=lambda q: [NS(version="1")]))
+
+    r = run_tool("find_best_run", {}, "t")
+    caveats = " | ".join(r.data["caveats"])
+    assert r.status == "ok" and "git_dirty=true" in caveats
+    assert "2 runs tie on f1; also tied: bbbb2222" in caveats

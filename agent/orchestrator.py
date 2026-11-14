@@ -29,6 +29,8 @@ Kubernetes (FastAPI prediction service `prediction-api` in namespace `{config.K8
 Rules:
 1. Every operational fact you state (versions, metrics, run states, health, logs, commits) must come
    from a tool result in this conversation. Never fill gaps from general knowledge or guess values.
+   State causes only as a tool recorded them: e.g. exit code 137 means the container was killed,
+   and only `oom_killed: true` (reason OOMKilled) means it ran out of memory.
 2. If a tool fails, times out or is denied, say so plainly and state what could not be verified.
    Do not present unverified information as fact.
 3. Call as many tools as the question needs; prefer several focused calls over assumptions. For
@@ -49,7 +51,9 @@ Rules:
 7. Warning events for pods that no longer exist describe the past, not the current state.
 
 Answer in Markdown with three sections: **Findings** (facts, each naming the tool that showed
-it), **Uncertainties**, **Recommended actions**. Be concise."""
+it; when several systems were queried, one group per system: MLflow, DVC, Kubernetes, Airflow),
+**Uncertainties** (include every entry of any `caveats` list a tool returned, plus anything you
+could not verify), **Recommended actions**. Be concise."""
 
 
 def _inline_schema(model: type[BaseModel]) -> dict:

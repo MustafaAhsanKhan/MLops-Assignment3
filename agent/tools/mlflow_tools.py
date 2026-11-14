@@ -149,6 +149,11 @@ def find_best_run(a: BestRunArgs) -> dict:
         caveats.append("best run was trained from uncommitted code (git_dirty=true)")
     if not versions:
         caveats.append("best run has no registered model version, so it cannot be deployed as-is")
+    ties = [r.info.run_id[:8] for r in ranked[1:]
+            if round(r.data.metrics[a.metric], 4) == round(best.data.metrics[a.metric], 4)]
+    if ties:
+        caveats.append(f"{len(ties) + 1} runs tie on {a.metric}; also tied: {', '.join(ties)} "
+                       "(prefer the one with clean code and a registered, gated version)")
     caveats.append(f"ranking uses only '{a.metric}' on one held-out test split; it is not evidence "
                    "of production readiness on its own")
     return {

@@ -90,7 +90,9 @@ def _pod_summary(p) -> dict:
                            "waiting_reason": waiting.reason if waiting else None,
                            "waiting_message": (waiting.message or "")[:200] if waiting else None,
                            "last_termination": {"reason": last.reason, "exit_code": last.exit_code,
-                                                "finished": _iso(last.finished_at)} if last else None})
+                                                "finished": _iso(last.finished_at),
+                                                # exit 137 is any SIGKILL; only this reason means out of memory
+                                                "oom_killed": last.reason == "OOMKilled"} if last else None})
     return {"name": p.metadata.name, "phase": p.status.phase, "node": p.spec.node_name,
             "started": _iso(p.status.start_time), "version": (p.metadata.labels or {}).get("app.kubernetes.io/version"),
             "ready": bool(containers) and all(c["ready"] for c in containers), "containers": containers}
