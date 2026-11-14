@@ -3,6 +3,11 @@
 An AI agent (Gemini tool calling) that answers questions about and operates an ML system built on
 DVC, MLflow, Apache Airflow 3 and Kubernetes.
 
+**Documentation:** [architecture](architecture.md) · [technical report](docs/report.md) (tools and
+permissions, evidence, 5 tested conversations, 2 failure investigations, limitations) ·
+[screenshots](screenshots/) · [conversation transcripts](docs/conversations/) ·
+[failure investigations](docs/failures/)
+
 ## Environment
 
 - Python 3.12 via [uv](https://docs.astral.sh/uv/); dependencies pinned in `uv.lock`.
@@ -48,6 +53,16 @@ Reproduce an older version:
 
 ```bash
 git checkout data-v1 -- data/dataset.csv.dvc && .venv/bin/dvc checkout
+```
+
+A recorded run of this, including the md5 checks, is in
+[docs/evidence/dvc_reproducible_checkout.txt](docs/evidence/dvc_reproducible_checkout.txt).
+
+`dvc.yaml` holds the same five stages as the Airflow DAG for local runs:
+
+```bash
+uv run dvc repro train   # validate -> preprocess -> train (no MLflow needed)
+uv run dvc repro         # also evaluate + quality gate (logs to MLflow, may register a model)
 ```
 
 ## MLflow + training
@@ -200,7 +215,7 @@ uv run ruff check .
 uv run pytest -v
 ```
 
-20 tests in `tests/`. Every external service is replaced by a fake (a scripted Gemini client,
+23 tests in `tests/`. Every external service is replaced by a fake (a scripted Gemini client,
 patched Airflow/MLflow/Kubernetes calls), so the suite needs no running services or API keys and
 runs in under a second. They cover:
 
@@ -213,3 +228,16 @@ runs in under a second. They cover:
 
 `.github/workflows/ci.yml` runs ruff and pytest on every pull request and on pushes to `main`,
 using the locked dependencies (`uv sync --frozen`).
+
+## Demo and evidence scripts
+
+With the services running:
+
+```bash
+# record one exchange with the agent into a Markdown transcript (tool trace included)
+.venv/bin/python scripts/record_chat.py docs/conversations/demo.md "Which model version is deployed?"
+.venv/bin/python scripts/record_chat.py docs/conversations/demo.md "yes" --session <id> --confirm <action_id>
+
+# re-capture the MLflow/Airflow/DVC/Kubernetes screenshots (uses the installed Google Chrome)
+uv run --with playwright python scripts/screenshots.py <failed_airflow_run_id> <successful_airflow_run_id>
+```

@@ -197,6 +197,6 @@ def get_task_log(a: LogArgs) -> dict:
 @tool("airflow", TriggerArgs, mutating=True, precheck=_approved_dag)
 def trigger_dag(a: TriggerArgs) -> dict:
     """Trigger an approved training DAG with a model config. Changes state: requires explicit user
-    confirmation. Returns the new run id; check progress with get_dag_run_status."""
+    confirmation. Returns the new run id; then call wait_for_dag_run once for the result."""
     r = api("POST", f"/dags/{_q(a.dag_id)}/dagRuns", json={"logical_date": None, "conf": a.conf.model_dump()})
     return _run_summary(r)
