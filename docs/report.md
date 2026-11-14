@@ -201,10 +201,25 @@ pytest on every pull request and every push to `main` with the locked environmen
 | Limitation | Impact | Proposed improvement |
 |---|---|---|
 | The model sometimes over-states. Observed: "inference endpoints returned 200" with no `/predict` in the logs; a Kubernetes statement deduced instead of checked; a recommendation that ignored its own `git_dirty` caveat; a misspelled tool name (rejected safely) | Small unsupported claims can reach the user | Check claims after the answer against the tool results it cites; use a stronger model for the final write-up; replay recorded tool outputs as a regression eval for prompts |
-| Several registered models were trained while the repo had uncommitted changes (`git_dirty=true`); only the deployed v8 is clean | The best tied candidates are not exactly reproducible from a commit | Make the quality gate fail on `git_dirty`, and re-run from the clean commit before promoting |
+| Several registered models were trained while the repo had uncommitted changes (`git_dirty=true`) | Those versions are not exactly reproducible from a commit. Resolved for production: v12 was retrained from clean commit `ec34ef0` and deployed (§10), but nothing stops it recurring | Make the quality gate fail on `git_dirty` |
 | The agent uses the local kubeconfig and Airflow admin. Namespace and DAG limits are enforced in code, not by the platforms | A bug in the tool layer would not be stopped by RBAC | ServiceAccount + Role limited to `mlops-app` (get/list pods, logs, events, services; patch deployments); an Airflow user that can only trigger `training_pipeline` |
 | Sessions and pending actions are in memory, the API has no auth, and it serves on localhost only | Lost on restart; not multi-user | Persist sessions (SQLite or Redis), add API auth, give pending actions an expiry |
 | A timed-out tool thread keeps running until its own HTTP timeout | Only acceptable because tools are reads with timeouts | Process-based isolation if long writes are ever added |
 | Model quality rests on one 114-row held-out split; there is no monitoring of live predictions | "Degradation" evidence must be supplied by the user; F1 ties are common | Cross-validation in the DAG; log predictions and expose Prometheus metrics so the agent can detect drift |
 | Promotion and deployment are scripts, not agent tools | Deliberate, but the last step is manual | A confirmed `promote_model` tool that re-checks gate, data version and `git_dirty` before moving an alias |
 | Single-node k3s, image loaded locally (`IfNotPresent`), DVC remote on a local disk | Not representative of multi-node or cloud setups | A container registry with immutable digests, an S3 DVC remote, lower `progressDeadlineSeconds` with rollout status reported by the agent |
+
+## 10. Final state (after the demos)
+
+The demos showed that every tied best candidate had `git_dirty=true`. So the DAG was re-run from
+the clean commit `ec34ef0` with the v9 configuration (logreg, C=0.5), and the result was deployed:
+
+| | Value |
+|---|---|
+| Airflow run | `manual__2026-11-14T18:59:44.799268+00:00`: 5/5 tasks succeeded in 39 s |
+| MLflow run | `2088580338ee446ab493bef6e7c5c713`: F1 0.9861, ROC-AUC 0.9957 (identical to v9, so v9's result reproduces), `git_dirty=false`, data-v2 (md5 matches DVC), gate passed |
+| Registry | version 12, alias `@candidate` |
+| Kubernetes | `prediction-api:model-v12`, 2/2 ready; live `/version` reports model v12, run `20885803`, commit `ec34ef0` |
+| Smoke test | `POST /predict` on 4 known rows (2 malignant, 2 benign): all correct |
+
+The screenshots and transcripts above were taken before this redeploy, so they show v8 as deployed.

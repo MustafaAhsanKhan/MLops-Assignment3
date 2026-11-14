@@ -5,7 +5,7 @@ metadata:
   namespace: mlops-app
   labels:
     app.kubernetes.io/name: prediction-api
-    app.kubernetes.io/version: model-v8
+    app.kubernetes.io/version: model-v12
 spec:
   replicas: 2
   revisionHistoryLimit: 5
@@ -21,11 +21,11 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: prediction-api
-        app.kubernetes.io/version: model-v8
+        app.kubernetes.io/version: model-v12
     spec:
       containers:
         - name: api
-          image: prediction-api:model-v8
+          image: prediction-api:model-v12
           imagePullPolicy: IfNotPresent   # image is built locally into colima's docker
           ports:
             - name: http
@@ -35,7 +35,7 @@ spec:
                 name: prediction-api-config
           env:
             - name: APP_VERSION
-              value: model-v8
+              value: model-v12
           readinessProbe:
             httpGet: {path: /ready, port: http}
             initialDelaySeconds: 3
